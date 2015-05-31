@@ -18,6 +18,7 @@
     "gulp-newer": "^0.5.0",
     "gulp-rename": "^1.2.2",
     "gulp-sourcemaps": "^1.5.1",
+    "gulp-util": "^3.0.5",
     "less": "~2",
     "requirejs": "^2.1.17",
     "source-map": "^0.4.2",
