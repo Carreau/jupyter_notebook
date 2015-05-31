@@ -8,13 +8,22 @@ var less = require('gulp-less');
 var minifyCSS = require('gulp-minify-css');
 var newer = require('gulp-newer');
 var rename = require('gulp-rename');
+var insert = require('gulp-insert');
 var sourcemaps = require('gulp-sourcemaps');
 
 // now some dev nice utilities.
 var livereload = require('gulp-livereload');
 
 gulp.task('css', function () {
+  var theme_file_content;
+  if (util.env.theme) {
+      var fs = require('fs');
+      theme_file_content = fs.readFileSync(util.env.theme)
+  } else {
+      theme_file_content = ''
+  }
   return gulp.src('./notebook/static/style/*.less')
+    .pipe(insert.append(theme_file_content))
     .pipe(sourcemaps.init())
     .pipe(less({
       paths: [ path.join(__dirname, 'less', 'includes') ]
