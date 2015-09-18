@@ -2501,6 +2501,7 @@ define(function (require) {
         // now that we're fully loaded, it is safe to restore save functionality
         this._fully_loaded = true;
         this.events.trigger('notebook_loaded.Notebook');
+        console.info('notebook_loaded.Notebook trigger')
     };
 
     Notebook.prototype.set_kernelselector = function(k_selector){
