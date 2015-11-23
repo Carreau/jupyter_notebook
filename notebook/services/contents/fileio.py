@@ -22,6 +22,9 @@ import nbformat
 
 from ipython_genutils.py3compat import str_to_unicode
 
+from traitlets.config import Configurable
+from traitlets import Bool
+
 
 def copy2_safe(src, dst, log=None):
     """copy src to dst
@@ -100,7 +103,7 @@ def atomic_writing(path, text=True, encoding='utf-8', log=None, **kwargs):
         os.remove(tmp_path)
 
 
-class FileManagerMixin(object):
+class FileManagerMixin(Configurable):
     """
     Mixin for ContentsAPI classes that interact with the filesystem.
 
@@ -118,6 +121,10 @@ class FileManagerMixin(object):
 
     log : logging.Logger
     """
+
+    use_atomic_writing = Bool(False, config=True, help="""flag to deactivate
+            atomic writing on slow (like networked) file system.""")
+
 
     @contextmanager
     def open(self, os_path, *args, **kwargs):
