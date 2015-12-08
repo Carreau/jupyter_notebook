@@ -32,7 +32,7 @@ from ipython_genutils.path import filefind
 from ipython_genutils.py3compat import string_types
 
 import notebook
-from notebook.utils import is_hidden, url_path_join, url_escape
+from notebook.utils import is_hidden, url_path_join, url_is_absolute, url_escape
 from notebook.services.security import csp_report_uri
 
 #-----------------------------------------------------------------------------
@@ -155,7 +155,10 @@ class IPythonHandler(AuthenticatedHandler):
     
     @property
     def mathjax_url(self):
-        return self.settings.get('mathjax_url', '')
+        url = self.settings.get('mathjax_url', '')
+        if not url or url_is_absolute(url):
+            return url
+        return url_path_join(self.base_url, url)
     
     @property
     def base_url(self):
@@ -386,6 +389,13 @@ class APIHandler(IPythonHandler):
         self.set_header('Content-Type', 'application/json')
         return super(APIHandler, self).finish(*args, **kwargs)
 
+    @web.authenticated
+    def options(self, *args, **kwargs):
+        self.set_header('Access-Control-Allow-Headers', 'accept, content-type')
+        self.set_header('Access-Control-Allow-Methods',
+                        'GET, PUT, PATCH, DELETE, OPTIONS')
+        self.finish()
+
 
 class Template404(IPythonHandler):
     """Render our 404 template"""
@@ -564,7 +574,7 @@ class FilesRedirectHandler(IPythonHandler):
         cm = self.contents_manager
         if cm.dir_exists(path):
             # it's a *directory*, redirect to /tree
-            url = url_path_join(self.base_url, 'tree', path)
+            url = url_path_join(self.base_url, 'tree', url_escape(path))
         else:
             orig_path = path
             # otherwise, redirect to /files
@@ -580,8 +590,7 @@ class FilesRedirectHandler(IPythonHandler):
             if not cm.file_exists(path=path):
                 raise web.HTTPError(404)
 
-            url = url_path_join(self.base_url, 'files', path)
-        url = url_escape(url)
+            url = url_path_join(self.base_url, 'files', url_escape(path))
         self.log.debug("Redirecting %s to %s", self.request.path, url)
         self.redirect(url)
     

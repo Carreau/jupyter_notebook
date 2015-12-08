@@ -72,8 +72,6 @@ You can then add the hashed password to your :file:`jupyter_notebook_config.py`.
 The default location for this file :file:`jupyter_notebook_config.py` is in
 your Jupyter folder in your home directory, ``~/.jupyter``, e.g.::
 
-    # Get notebook configuration and add hashed password
-    c = get_config()
     c.NotebookApp.password = u'sha1:67c9e60bb8b6:9ffede0825894254b2e042ea597d771089e11aed'
 
 Using SSL for encrypted communication
@@ -92,7 +90,7 @@ You can start the notebook to communicate via a secure protocol mode by setting
 the ``certfile`` option to your self-signed certificate, i.e. ``mycert.pem``,
 with the command::
 
-    $ jupyter notebook --certfile=mycert.pem
+    $ jupyter notebook --certfile=mycert.pem --keyfile mykey.key
 
 .. tip::
 
@@ -100,7 +98,7 @@ with the command::
     the following command will create a certificate valid for 365 days with
     both the key and certificate data written to the same file::
 
-        $ openssl req -x509 -nodes -days 365 -newkey rsa:1024 -keyout mycert.pem -out mycert.pem
+        $ openssl req -x509 -nodes -days 365 -newkey rsa:1024 -keyout mykey.key -out mycert.pem
 
 When starting the notebook server, your browser may warn that your self-signed
 certificate is insecure or unrecognized.  If you wish to have a fully
@@ -145,11 +143,9 @@ all fields commented out. The minimum set of configuration options that
 you should to uncomment and edit in :file:``jupyter_notebook_config.py`` is the
 following::
 
-     # Notebook configuration for public notebook server
-     c = get_config()
-
      # Set options for certfile, ip, password, and toggle off browser auto-opening
      c.NotebookApp.certfile = u'/absolute/path/to/your/certificate/mycert.pem'
+     c.NotebookApp.keyfile = u'/absolute/path/to/your/certificate/mykey.key'
      # Set ip to '*' to bind on all interfaces (ips) for the public server
      c.NotebookApp.ip = '*'
      c.NotebookApp.password = u'sha1:bcd259ccf...<your hashed password here>'
@@ -195,6 +191,9 @@ instructions about modifying ``jupyter_notebook_config.py``)::
 Known issues
 ------------
 
+Proxies
+~~~~~~~
+
 When behind a proxy, especially if your system or browser is set to autodetect
 the proxy, the notebook web application might fail to connect to the server's
 websockets, and present you with a warning at startup. In this case, you need
@@ -203,3 +202,23 @@ to configure your system not to use the proxy for the server's address.
 For example, in Firefox, go to the Preferences panel, Advanced section,
 Network tab, click 'Settings...', and add the address of the notebook server
 to the 'No proxy for' field.
+
+Docker CMD
+~~~~~~~~~~
+
+Using ``jupyter notebook`` as a
+`Docker CMD <https://docs.docker.com/reference/builder/#cmd>`_ results in
+kernels repeatedly crashing, likely due to a lack of `PID reaping
+<https://blog.phusion.nl/2015/01/20/docker-and-the-pid-1-zombie-reaping-problem/>`_.
+To avoid this, use the `tini <https://github.com/krallin/tini>`_ ``init`` as your
+Dockerfile `ENTRYPOINT`::
+
+  # Add Tini. Tini operates as a process subreaper for jupyter. This prevents
+  # kernel crashes.
+  ENV TINI_VERSION v0.6.0
+  ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini /usr/bin/tini
+  RUN chmod +x /usr/bin/tini
+  ENTRYPOINT ["/usr/bin/tini", "--"]
+
+  EXPOSE 8888
+  CMD ["jupyter", "notebook", "--port=8888", "--no-browser", "--ip=0.0.0.0"]

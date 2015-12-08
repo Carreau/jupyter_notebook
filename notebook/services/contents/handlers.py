@@ -77,8 +77,6 @@ def validate_model(model, expect_content):
 
 class ContentsHandler(APIHandler):
 
-    SUPPORTED_METHODS = (u'GET', u'PUT', u'PATCH', u'POST', u'DELETE')
-
     def location_url(self, path):
         """Return the full URL location of a file.
 
@@ -87,9 +85,9 @@ class ContentsHandler(APIHandler):
         path : unicode
             The API path of the file, such as "foo/bar.txt".
         """
-        return url_escape(url_path_join(
-            self.base_url, 'api', 'contents', path
-        ))
+        return url_path_join(
+            self.base_url, 'api', 'contents', url_escape(path)
+        )
 
     def _finish_model(self, model, location=True):
         """Finish a JSON request with a model, setting relevant headers, etc."""
@@ -259,8 +257,6 @@ class ContentsHandler(APIHandler):
 
 class CheckpointsHandler(APIHandler):
 
-    SUPPORTED_METHODS = ('GET', 'POST')
-
     @web.authenticated
     @json_errors
     @gen.coroutine
@@ -280,15 +276,13 @@ class CheckpointsHandler(APIHandler):
         checkpoint = yield gen.maybe_future(cm.create_checkpoint(path))
         data = json.dumps(checkpoint, default=date_default)
         location = url_path_join(self.base_url, 'api/contents',
-            path, 'checkpoints', checkpoint['id'])
-        self.set_header('Location', url_escape(location))
+            url_escape(path), 'checkpoints', url_escape(checkpoint['id']))
+        self.set_header('Location', location)
         self.set_status(201)
         self.finish(data)
 
 
 class ModifyCheckpointsHandler(APIHandler):
-
-    SUPPORTED_METHODS = ('POST', 'DELETE')
 
     @web.authenticated
     @json_errors

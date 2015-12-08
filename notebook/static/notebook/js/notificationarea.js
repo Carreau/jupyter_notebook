@@ -25,6 +25,7 @@ define([
     NotebookNotificationArea.prototype.init_notification_widgets = function () {
         this.init_kernel_notification_widget();
         this.init_notebook_notification_widget();
+        this.init_marked_cells_notification_widget();
     };
 
     /**
@@ -34,7 +35,7 @@ define([
      */
     NotebookNotificationArea.prototype.init_kernel_notification_widget = function () {
         var that = this;
-        var knw = this.new_notification_widget('kernel');
+        var knw = this.widget('kernel');
         var $kernel_ind_icon = $("#kernel_indicator_icon");
         var $modal_ind_icon = $("#modal_indicator");
         var $readonly_ind_icon = $('#readonly-indicator');
@@ -283,7 +284,7 @@ define([
      * @method init_notebook_notification_widget
      */
     NotebookNotificationArea.prototype.init_notebook_notification_widget = function () {
-        var nnw = this.new_notification_widget('notebook');
+        var nnw = this.widget('notebook');
 
         // Notebook events
         this.events.on('notebook_loading.Notebook', function () {
@@ -336,6 +337,23 @@ define([
         });
         this.events.on('autosave_enabled.Notebook', function (evt, interval) {
             nnw.set_message("Saving every " + interval / 1000 + "s", 1000);
+        });
+    };
+
+    /**
+     * Initialize the notification widget for marked cells.
+     *
+     * @method init_marked_cells_notification_widget
+     */
+    NotebookNotificationArea.prototype.init_marked_cells_notification_widget = function () {
+        var mcnw = this.widget('marked_cells');
+
+        this.events.on('marked_offscreen.Cell', function (evt, num) {
+            if (num === 0) {
+                mcnw.hide();
+            } else {
+                mcnw.set_message(num + " marked cells offscreen", undefined, undefined, {class: 'info'});
+            }
         });
     };
 

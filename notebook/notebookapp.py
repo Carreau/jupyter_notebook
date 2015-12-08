@@ -83,7 +83,7 @@ from ipython_genutils import py3compat
 from jupyter_core.paths import jupyter_runtime_dir, jupyter_path
 from notebook._sysinfo import get_sys_info
 
-from .utils import url_path_join, check_pid
+from .utils import url_path_join, check_pid, url_escape
 
 #-----------------------------------------------------------------------------
 # Module globals
@@ -120,7 +120,7 @@ class DeprecationHandler(IPythonHandler):
     def get(self, url_path):
         self.set_header("Content-Type", 'text/javascript')
         self.finish("""
-            console.warn('`/static/widgets/js` is deprecated.  Use `/nbextensions/widgets/widgets/js` instead.');
+            console.warn('`/static/widgets/js` is deprecated.  Use `nbextensions/widgets/widgets/js` instead.');
             define(['%s'], function(x) { return x; });
         """ % url_path_join('nbextensions', 'widgets', 'widgets', url_path.rstrip('.js')))
         self.log.warn('Deprecated widget Javascript path /static/widgets/js/*.js was used')
@@ -347,6 +347,7 @@ aliases.update({
     'transport': 'KernelManager.transport',
     'keyfile': 'NotebookApp.keyfile',
     'certfile': 'NotebookApp.certfile',
+    'client-ca': 'NotebookApp.client_ca',
     'notebook-dir': 'NotebookApp.notebook_dir',
     'browser': 'NotebookApp.browser',
     'pylab': 'NotebookApp.pylab',
@@ -469,6 +470,10 @@ class NotebookApp(JupyterApp):
     
     keyfile = Unicode(u'', config=True, 
         help="""The full path to a private key file for usage with SSL/TLS."""
+    )
+    
+    client_ca = Unicode(u'', config=True,
+        help="""The full path to a certificate authority certifificate for SSL/TLS client authentication."""
     )
     
     cookie_secret_file = Unicode(config=True,
@@ -653,9 +658,7 @@ class NotebookApp(JupyterApp):
     def _mathjax_url_default(self):
         if not self.enable_mathjax:
             return u''
-        static_url_prefix = self.tornado_settings.get("static_url_prefix",
-                         url_path_join(self.base_url, "static")
-        )
+        static_url_prefix = self.tornado_settings.get("static_url_prefix", "static")
         return url_path_join(static_url_prefix, 'components', 'MathJax', 'MathJax.js')
     
     def _mathjax_url_changed(self, name, old, new):
@@ -865,6 +868,9 @@ class NotebookApp(JupyterApp):
             ssl_options['certfile'] = self.certfile
         if self.keyfile:
             ssl_options['keyfile'] = self.keyfile
+        if self.client_ca:
+            ssl_options['ca_certs'] = self.client_ca
+            ssl_options['cert_reqs'] = ssl.CERT_REQUIRED
         if not ssl_options:
             # None indicates no SSL config
             ssl_options = None
@@ -1088,7 +1094,7 @@ class NotebookApp(JupyterApp):
                     self.exit(1)
 
                 relpath = os.path.relpath(self.file_to_run, self.notebook_dir)
-                uri = url_path_join('notebooks', *relpath.split(os.sep))
+                uri = url_escape(url_path_join('notebooks', *relpath.split(os.sep)))
             else:
                 uri = 'tree'
             if browser:

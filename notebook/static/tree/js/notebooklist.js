@@ -27,6 +27,7 @@ define([
          */
         var that = this;
         this.session_list = options.session_list;
+        this.events = this.session_list.events;
         // allow code re-use by just changing element_name in kernellist.js
         this.element_name = options.element_name || 'notebook';
         this.selector = selector;
@@ -45,6 +46,7 @@ define([
                 function(e, d) { that.sessions_loaded(d); });
         }
         this.selected = [];
+        this._max_upload_size_mb = 25;
     };
 
     NotebookList.prototype.style = function () {
@@ -75,8 +77,9 @@ define([
             $('#new-file').click(function(e) {
                 var w = window.open('', IPython._target);
                 that.contents.new_untitled(that.notebook_path || '', {type: 'file', ext: '.txt'}).then(function(data) {
-                    var url = utils.url_join_encode(
-                        that.base_url, 'edit', data.path
+                    var url = utils.url_path_join(
+                        that.base_url, 'edit',
+                        utils.encode_uri_components(data.path)
                     );
                     w.location = url;
                 }).catch(function (e) {
@@ -178,6 +181,16 @@ define([
             var f = files[i];
             var name_and_ext = utils.splitext(f.name);
             var file_ext = name_and_ext[1];
+
+            // skip large files with a warning
+            if (f.size > this._max_upload_size_mb * 1024 * 1024) {
+                dialog.modal({
+                    title : 'Cannot upload file',
+                    body : "Cannot upload file (>" + this._max_upload_size_mb + " MB) '" + f.name + "'",
+                    buttons : {'OK' : { 'class' : 'btn-primary' }}
+                });
+                continue;
+            }
 
             var reader = new FileReader();
             if (file_ext === '.ipynb') {
@@ -298,7 +311,7 @@ define([
             try {
                 this.add_link(model, item);
             } catch(err) {
-                console.log('Error adding link: ' + err)
+                console.log('Error adding link: ' + err);
             }
         }
         // Trigger an event when we've finished drawing the notebook list.
@@ -550,10 +563,10 @@ define([
         item.find(".item_icon").addClass(icon).addClass('icon-fixed-width');
         var link = item.find("a.item_link")
             .attr('href',
-                utils.url_join_encode(
+                utils.url_path_join(
                     this.base_url,
                     uri_prefix,
-                    path
+                    utils.encode_uri_components(path)
                 )
             );
 
@@ -613,10 +626,10 @@ define([
 
         var session = this.sessions[path];
         if (session) {
-            var url = utils.url_join_encode(
+            var url = utils.url_path_join(
                 this.base_url,
                 'api/sessions',
-                session
+                encodeURIComponent(session.id)
             );
             $.ajax(url, settings);
         }
@@ -813,7 +826,7 @@ define([
                     filedata = btoa(bytes);
                     format = 'base64';
                 }
-                var model = {};
+                var model = { name: filename, path: path };
 
                 var name_and_ext = utils.splitext(filename);
                 var file_ext = name_and_ext[1];

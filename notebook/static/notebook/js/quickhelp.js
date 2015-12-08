@@ -191,11 +191,13 @@ define([
             'border. <b>Command mode</b> binds the keyboard to notebook level actions '+
             'and is indicated by a grey cell border.'
         );
+        element.append(doc);
         if (platform === 'MacOS') {
+            doc = $('<div/>').addClass('alert alert-info');
             var key_div = this.build_key_names();
             doc.append(key_div);
+            element.append(doc);
         }
-        element.append(doc);
 
         // Command mode
         var cmd_div = this.build_command_help();
@@ -229,7 +231,7 @@ define([
                     { shortcut:"␣", help:"Space" },
                     { shortcut:"⇥", help:"Tab" }];
         var i, half, n;
-        var div = $('<div/>').append('MacOS modifier keys:');
+        var div = $('<div/>').append('Mac OS X modifier keys:');
         var sub_div = $('<div/>').addClass('container-fluid');
         var col1 = $('<div/>').addClass('col-md-6');
         var col2 = $('<div/>').addClass('col-md-6');
@@ -255,8 +257,8 @@ define([
     
     QuickHelp.prototype.build_edit_help = function (cm_shortcuts) {
         var edit_shortcuts = this.keyboard_manager.edit_shortcuts.help();
-        jQuery.merge(cm_shortcuts, edit_shortcuts);
-        return build_div('<h4>Edit Mode (press <kbd>Enter</kbd> to enable)</h4>', cm_shortcuts);
+        edit_shortcuts = jQuery.merge(jQuery.merge([], cm_shortcuts), edit_shortcuts);
+        return build_div('<h4>Edit Mode (press <kbd>Enter</kbd> to enable)</h4>', edit_shortcuts);
     };
 
     var build_one = function (s) {
@@ -272,6 +274,16 @@ define([
     };
 
     var build_div = function (title, shortcuts) {
+        
+        // Remove jupyter-notebook:ignore shortcuts.
+        shortcuts = shortcuts.filter(function(shortcut) {
+            if (shortcut.help === 'ignore') {
+                return false;
+            } else {
+                return true;
+            }
+        });
+        
         var i, half, n;
         var div = $('<div/>').append($(title));
         var sub_div = $('<div/>').addClass('container-fluid');

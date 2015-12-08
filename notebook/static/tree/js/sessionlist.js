@@ -62,7 +62,7 @@ define([
             success : $.proxy(that.sessions_loaded, this),
             error : utils.log_ajax_error,
         };
-        var url = utils.url_join_encode(this.base_url, 'api/sessions');
+        var url = utils.url_path_join(this.base_url, 'api/sessions');
         $.ajax(url, settings);
     };
 
@@ -72,7 +72,12 @@ define([
         var nb_path;
         for (var i=0; i<len; i++) {
             nb_path = data[i].notebook.path;
-            this.sessions[nb_path] = data[i].id;
+            this.sessions[nb_path] = {
+                id: data[i].id,
+                kernel: {
+                  name: data[i].kernel.name
+                }
+            };
         }
         this.events.trigger('sessions_loaded.Dashboard', this.sessions);
     };

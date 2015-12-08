@@ -29,6 +29,12 @@ define(function (require) {
     var scrollmanager = require('notebook/js/scrollmanager');
     var commandpalette = require('notebook/js/commandpalette');
 
+    var _SOFT_SELECTION_CLASS = 'jupyter-soft-selected';
+
+    function soft_selected(cell){
+        return cell.element.hasClass(_SOFT_SELECTION_CLASS);
+    }
+
     /**
      * Contains and manages cells.
      * @class Notebook
@@ -58,6 +64,8 @@ define(function (require) {
         this.ws_url = options.ws_url;
         this._session_starting = false;
         this.last_modified = null;
+        // debug 484
+        this._last_modified = 'init';
 
         //  Create default scroll manager.
         this.scroll_manager = new scrollmanager.ScrollManager(this);
@@ -111,7 +119,6 @@ define(function (require) {
         this.element = $(selector);
         this.element.scroll();
         this.element.data("notebook", this);
-        this.next_prompt_number = 1;
         this.session = null;
         this.kernel = null;
         this.kernel_busy = false;
@@ -186,6 +193,7 @@ define(function (require) {
     Notebook.prototype.bind_events = function () {
         var that = this;
 
+
         this.events.on('set_next_input.Notebook', function (event, data) {
             if (data.replace) {
                 data.cell.set_text(data.text);
@@ -216,7 +224,7 @@ define(function (require) {
 
         this.events.on('select.Cell', function (event, data) {
             var index = that.find_cell_index(data.cell);
-            that.select(index);
+            that.select(index, !data.extendSelection);
         });
 
         this.events.on('edit_mode.Cell', function (event, data) {
@@ -228,11 +236,15 @@ define(function (require) {
         });
         
         this.events.on('spec_changed.Kernel', function(event, data) {
+            var existing_spec = that.metadata.kernelspec;
             that.metadata.kernelspec = {
                 name: data.name,
                 display_name: data.spec.display_name,
                 language: data.spec.language,
             };
+            if (!existing_spec || JSON.stringify(existing_spec) != JSON.stringify(that.metadata.kernelspec)) {
+                that.set_dirty(true);
+            }
             // start session if the current session isn't already correct
             if (!(that.session && that.session.kernel && that.session.kernel.name === data.name)) {
                 that.start_session(data.name);
@@ -245,8 +257,12 @@ define(function (require) {
                 delete that.metadata.language_info;
                 return;
             }
+            var existing_info = that.metadata.language_info;
             var langinfo = kinfo.language_info;
             that.metadata.language_info = langinfo;
+            if (!existing_info || JSON.stringify(existing_info) != JSON.stringify(langinfo)) {
+                that.set_dirty(true);
+            }
             // Mode 'null' should be plain, unhighlighted text.
             var cm_mode = langinfo.codemirror_mode || langinfo.name || 'null';
             that.set_codemirror_mode(cm_mode);
@@ -284,6 +300,7 @@ define(function (require) {
             var time = (extrap !== undefined) ? ((extrap.duration !== undefined ) ? extrap.duration : 'fast') : 'fast';
             expand_time(time);
         });
+
 
         // Firefox 22 broke $(window).on("beforeunload")
         // I'm not sure why or how.
@@ -393,7 +410,7 @@ define(function (require) {
         var st = sme.scrollTop();
         var t = sme.offset().top;
         var ct = cells[index].element.offset().top;
-        var scroll_value =  st + ct - (t + .01 * percent * h);
+        var scroll_value =  st + ct - (t + 0.01 * percent * h);
         this.scroll_manager.element.animate({scrollTop:scroll_value}, time);
         return scroll_value;
     };
@@ -567,13 +584,30 @@ define(function (require) {
         return i;
     };
 
+
+    Notebook.prototype.get_selected_cells = function () {
+        return this.get_cells().filter(function(cell, index){ return cell.selected || soft_selected(cell) || cell.anchor})
+    };
+
+    Notebook.prototype.get_selected_cells_indices = function () {
+
+        var result = [];
+        this.get_cells().filter(function (cell, index) {
+            if (cell.selected || soft_selected(cell) || cell.anchor) {
+                result.push(index);
+            }
+        });
+        return result;
+    };
+
+
     /**
      * Get the currently selected cell.
      * 
      * @return {Cell} The selected cell
      */
     Notebook.prototype.get_selected_cell = function () {
-        var index = this.get_selected_index();
+        var index = this.get_selected_cells_indices();
         return this.get_cell(index);
     };
 
@@ -591,6 +625,15 @@ define(function (require) {
         }
     };
 
+    Notebook.prototype.get_anchor_index = function () {
+        var result = null;
+        this.get_cell_elements().filter(function (index) {
+            if ($(this).data("cell").anchor === true) {
+                result = index;
+            }
+        });
+        return result;
+    };
     /**
      * Get the index of the currently selected cell.
      *
@@ -606,56 +649,51 @@ define(function (require) {
         return result;
     };
 
-    /**
-     * Get the index of the anchor cell for range selection
-     *
-     * @return {integer} The anchor cell's numeric index
-     */
-    Notebook.prototype.get_selection_anchor = function() {
-        var result = null;
-        this.get_cell_elements().filter(function (index) {
-            if ($(this).data("cell").selection_anchor === true) {
-                result = index;
-            }
-        });
-        return result;
-    };
-
-    /**
-     * Get an array of the cells in the currently selected range
-     *
-     * @return {Array} The selected cells
-     */
-    Notebook.prototype.get_selected_cells = function () {
-        return this.get_cells().filter(function(cell) {
-            return cell.in_selection;
-        });
-    };
-
-    /**
-     * Get the indices of the currently selected range of cells.
-     *
-     * @return {Array} The selected cells' numeric indices
-     */
-    Notebook.prototype.get_selected_indices = function () {
-        var result = [];
-        this.get_cell_elements().filter(function (index) {
-            if ($(this).data("cell").in_selection === true) {
-                result.push(index);
-            }
-        });
-        return result;
-    };
 
     // Cell selection.
+
+    Notebook.prototype.extend_selection_by = function(delta) {
+        var index = this.get_selected_index();
+        // do not move anchor
+        return this.select(index+delta, false);
+    };
+
+
+    Notebook.prototype.update_soft_selection = function(){
+        var i1 = this.get_selected_index();
+        var i2 = this.get_anchor_index();
+        var low  = Math.min(i1, i2);
+        var high = Math.max(i1, i2);
+        if (low !== high){
+            $('body').addClass('jupyter-multi-select');
+        } else {
+            $('body').removeClass('jupyter-multi-select');
+        }
+        this.get_cells().map(function(cell, index, all){
+            if( low <= index && index <= high ){
+                cell.element.addClass(_SOFT_SELECTION_CLASS);
+            } else {
+                cell.element.removeClass(_SOFT_SELECTION_CLASS);
+            }
+        })
+    }
+
+    Notebook.prototype._contract_selection = function(){
+        var i = this.get_selected_index();
+        this.select(i, true);
+    }
 
     /**
      * Programmatically select a cell.
      * 
      * @param {integer} index - A cell's index
+     * @param {bool} moveanchor – whether to move the selection
+     *               anchor, default to true.
      * @return {Notebook} This notebook
      */
-    Notebook.prototype.select = function (index) {
+    Notebook.prototype.select = function (index, moveanchor) {
+        moveanchor = (moveanchor===undefined)? true : moveanchor;
+
         if (this.is_valid_cell_index(index)) {
             var sindex = this.get_selected_index();
             if (sindex !== null && index !== sindex) {
@@ -664,35 +702,37 @@ define(function (require) {
                 if (this.mode !== 'command') {
                     this.command_mode();
                 }
+                this.get_cell(sindex).unselect(moveanchor);
             }
-            var current_selection = this.get_selected_cells();
-            for (var i=0; i<current_selection.length; i++) {
-                current_selection[i].unselect();
+            if(moveanchor){
+                this.get_cell(this.get_anchor_index()).unselect(true);
             }
-
-            var cell = this._select(index);
-            cell.selection_anchor = true;
+            var cell = this.get_cell(index);
+            cell.select(moveanchor);
+            if (cell.cell_type === 'heading') {
+                this.events.trigger('selected_cell_type_changed.Notebook',
+                    {'cell_type':cell.cell_type,level:cell.level}
+                );
+            } else {
+                this.events.trigger('selected_cell_type_changed.Notebook',
+                    {'cell_type':cell.cell_type}
+                );
+            }
         }
+        this.update_soft_selection();
         return this;
-    };
-
-    Notebook.prototype._select = function(index) {
-        var cell = this.get_cell(index);
-        cell.select();
-        this.events.trigger('selected_cell_type_changed.Notebook',
-            {'cell_type':cell.cell_type}
-        );
-        return cell;
     };
 
     /**
      * Programmatically select the next cell.
      *
+     * @param {bool} moveanchor – whether to move the selection
+     *               anchor, default to true.
      * @return {Notebook} This notebook
      */
-    Notebook.prototype.select_next = function () {
+    Notebook.prototype.select_next = function (moveanchor) {
         var index = this.get_selected_index();
-        this.select(index+1);
+        this.select(index+1, moveanchor);
         return this;
     };
 
@@ -701,46 +741,10 @@ define(function (require) {
      *
      * @return {Notebook} This notebook
      */
-    Notebook.prototype.select_prev = function () {
+    Notebook.prototype.select_prev = function (moveanchor) {
         var index = this.get_selected_index();
-        this.select(index-1);
+        this.select(index-1, moveanchor);
         return this;
-    };
-
-    /**
-     * Extend the selected range
-     *
-     * @param {string} direction - 'up' or 'down
-     */
-    Notebook.prototype.extend_selection = function(direction) {
-        var anchor_ix = this.get_selection_anchor();
-        var cursor_ix = this.get_selected_index();
-        var range_direction = (cursor_ix > anchor_ix) ? 'down' : 'up';
-        var contracting = (cursor_ix !== anchor_ix) &&
-                            (direction !== range_direction);
-        var ix_delta = (direction === 'up') ? -1 : 1;
-        var new_ix = cursor_ix + ix_delta;
-        if (new_ix < 0 || new_ix >= this.ncells()) {
-            return false;
-        }
-        if (this.mode !== 'command') {
-            this.command_mode();
-        }
-        this.get_cell(cursor_ix).unselect(!contracting);
-        this._select(new_ix);
-        return true;
-    };
-
-    /**
-     * Clear selection of multiple cells (except the cell at the cursor)
-     */
-    Notebook.prototype.reset_selection = function() {
-        var current_selection = this.get_selected_cells();
-        for (var i=0; i<current_selection.length; i++) {
-            if (!current_selection[i].selected) {
-                current_selection[i].unselect();
-            }
-        }
     };
 
 
@@ -793,10 +797,10 @@ define(function (require) {
      * @param {Cell} [cell] Cell to enter edit mode on.
      */
     Notebook.prototype.handle_edit_mode = function (cell) {
+        this._contract_selection();
         if (cell && this.mode !== 'edit') {
             cell.edit_mode();
             this.mode = 'edit';
-            this.reset_selection();
             this.events.trigger('edit_mode.Notebook');
             this.keyboard_manager.edit_mode();
         }
@@ -806,6 +810,7 @@ define(function (require) {
      * Make a cell enter edit mode.
      */
     Notebook.prototype.edit_mode = function () {
+        this._contract_selection();
         var cell = this.get_selected_cell();
         if (cell && this.mode !== 'edit') {
             cell.unrender();
@@ -914,7 +919,7 @@ define(function (require) {
      */
     Notebook.prototype.delete_cells = function(indices) {
         if (indices === undefined) {
-            indices = this.get_selected_indices();
+            indices = this.get_selected_cells_indices();
         }
 
         this.undelete_backup = [];
@@ -962,6 +967,13 @@ define(function (require) {
                 this.undelete_below = true;
             }
             this.select(cursor_ix_after);
+        }
+
+        // Check if the cells were after the cursor
+        for (var i=0; i < indices.length; i++) {
+            if (indices[i] > cursor_ix_before) {
+                this.undelete_below = true;
+            }
         }
 
         // This will put all the deleted cells back in one location, rather than
@@ -1348,6 +1360,10 @@ define(function (require) {
      */
     Notebook.prototype.copy_cell = function () {
         var cells = this.get_selected_cells();
+        if (cells.length === 0) {
+            cells = [this.get_selected_cell()];
+        }
+        
         this.clipboard = [];
         var cell_json;
         for (var i=0; i < cells.length; i++) {
@@ -1448,7 +1464,7 @@ define(function (require) {
 
         // Check if trying to merge above on topmost cell or wrap around
         // when merging above, see #330
-        if (indices.filter(function(item) {return item < 0}).length > 0) {
+        if (indices.filter(function(item) {return item < 0;}).length > 0) {
             return;
         }
 
@@ -1472,7 +1488,7 @@ define(function (require) {
 
         // Update the contents of the target cell
         if (target instanceof codecell.CodeCell) {
-            target.set_text(contents.join('\n\n'))
+            target.set_text(contents.join('\n\n'));
         } else {
             var was_rendered = target.rendered;
             target.unrender(); // Must unrender before we set_text.
@@ -1494,7 +1510,7 @@ define(function (require) {
      * Merge the selected range of cells
      */
     Notebook.prototype.merge_selected_cells = function() {
-        this.merge_cells(this.get_selected_indices());
+        this.merge_cells(this.get_selected_cells_indices());
     };
 
     /**
@@ -1789,10 +1805,86 @@ define(function (require) {
     };
     
     /**
-     * Prompt the user to restart the Jupyter kernel.
+     * Prompt the user to restart the kernel and re-run everything.
+     * if options.confirm === false, no confirmation dialog is shown.
      */
-    Notebook.prototype.restart_kernel = function () {
+    Notebook.prototype.restart_run_all = function (options) {
         var that = this;
+        var restart_options = {};
+        restart_options.confirm = (options || {}).confirm;
+        restart_options.dialog = {
+            notebook: that,
+            keyboard_manager: that.keyboard_manager,
+            title : "Restart kernel and re-run the whole notebook?",
+            body : $("<p/>").text(
+                'Are you sure you want to restart the current kernel and re-execute the whole notebook?  All variables and outputs will be lost.'
+            ),
+            buttons : {
+                "Restart & run all cells" : {
+                    "class" : "btn-danger",
+                    "click" : function () {
+                        that.execute_all_cells();
+                    },
+                },
+            }
+        };
+        return this._restart_kernel(restart_options);
+    };
+
+    /**
+     * Prompt the user to restart the kernel and clear output.
+     * if options.confirm === false, no confirmation dialog is shown.
+     */
+    Notebook.prototype.restart_clear_output = function (options) {
+        var that = this;
+        var restart_options = {};
+        restart_options.confirm = (options || {}).confirm;
+        restart_options.dialog = {
+            notebook: that,
+            keyboard_manager: that.keyboard_manager,
+            title : "Restart kernel and clear all output?",
+            body : $("<p/>").text(
+                'Do you want to restart the current kernel and clear all output?  All variables and outputs will be lost.'
+            ),
+            buttons : {
+                "Restart & clear all outputs" : {
+                    "class" : "btn-danger",
+                    "click" : function (){
+                        that.clear_all_output();
+                    },
+                },
+            }
+        };
+        return this._restart_kernel(restart_options);
+    };
+
+    /**
+     * Prompt the user to restart the kernel.
+     * if options.confirm === false, no confirmation dialog is shown.
+     */
+    Notebook.prototype.restart_kernel = function (options) {
+        var that = this;
+        var restart_options = {};
+        restart_options.confirm = (options || {}).confirm;
+        restart_options.dialog = {
+            title : "Restart kernel?",
+            body : $("<p/>").text(
+                'Do you want to restart the current kernel?  All variables will be lost.'
+            ),
+            buttons : {
+                "Restart" : {
+                    "class" : "btn-danger",
+                    "click" : function () {},
+                },
+            }
+        };
+        return this._restart_kernel(restart_options);
+    };
+    
+    // inner implementation of restart dialog & promise
+    Notebook.prototype._restart_kernel = function (options) {
+        var that = this;
+        options = options || {};
         var resolve_promise, reject_promise;
         var promise = new Promise(function (resolve, reject){
             resolve_promise = resolve;
@@ -1805,53 +1897,85 @@ define(function (require) {
                 that.events.one('kernel_ready.Kernel', resolve_promise);
             }, reject_promise);
         }
-    
-        dialog.modal({
-            notebook: that,
-            keyboard_manager: that.keyboard_manager,
-            title : "Restart kernel or continue running?",
-            body : $("<p/>").text(
-                'Do you want to restart the current kernel?  You will lose all variables defined in it.'
-            ),
-            buttons : {
-                "Continue running" : {},
-                "Clear all outputs & restart" : {
-                    "class" : "btn-danger",
-                    "click" : function(){
-                        that.clear_all_output();
-                        restart_and_resolve();
-                    },
-                },
-                "Restart" : {
-                    "class" : "btn-warning",
-                    "click" : function() {
-                        restart_and_resolve();
-                    }
-                },
-            }
+        
+        if (options.confirm === false) {
+            var default_button = options.dialog.buttons[Object.keys(options.dialog.buttons)[0]];
+            promise.then(default_button.click);
+            restart_and_resolve();
+            return promise;
+        }
+        options.dialog.notebook = this;
+        options.dialog.keyboard_manager = this.keyboard_manager;
+        // add 'Continue running' cancel button
+        var buttons = {
+            "Continue running": {},
+        };
+        // hook up button.click actions after restart promise resolves
+        Object.keys(options.dialog.buttons).map(function (key) {
+            var button = buttons[key] = options.dialog.buttons[key];
+            var click = button.click;
+            button.click = function () {
+                promise.then(click);
+                restart_and_resolve();
+            };
         });
+        options.dialog.buttons = buttons;
+        dialog.modal(options.dialog);
         return promise;
     };
-    
+
+    /**
+     * Execute cells corresponding to the given indices.
+     *
+     * @param {list} indices - indices of the cells to execute
+     */
+    Notebook.prototype.execute_cells = function (indices) {
+        if (indices.length === 0) {
+            return;
+        }
+
+        var cell;
+        for (var i = 0; i < indices.length; i++) {
+            cell = this.get_cell(indices[i]);
+            cell.execute();
+        }
+
+        this.select(indices[indices.length - 1]);
+        this.command_mode();
+        this.set_dirty(true);
+    };
+
     /**
      * Execute or render cell outputs and go into command mode.
      */
+    Notebook.prototype.execute_selected_cells = function () {
+        this.execute_cells(this.get_selected_cells_indices());
+    };
+
+    
+    /**
+     * Alias for execute_selected_cells, for backwards compatibility --
+     * previously, doing "Run Cell" would only ever run a single cell (hence
+     * `execute_cell`), but now it runs all marked cells, so that's the
+     * preferable function to use. But it is good to keep this function to avoid
+     * breaking existing extensions, etc.
+     */
     Notebook.prototype.execute_cell = function () {
-        // mode = shift, ctrl, alt
-        var cell = this.get_selected_cell();
-        
-        cell.execute();
-        this.command_mode();
-        this.set_dirty(true);
+        this.execute_selected_cells();
     };
 
     /**
      * Execute or render cell outputs and insert a new cell below.
      */
     Notebook.prototype.execute_cell_and_insert_below = function () {
+        var indices = this.get_selected_cells_indices();
+        if (indices.length > 1) {
+            this.execute_cells(indices);
+            return;
+        }
+
         var cell = this.get_selected_cell();
         var cell_index = this.find_cell_index(cell);
-        
         cell.execute();
 
         // If we are at the end always insert a new cell and return
@@ -1876,10 +2000,14 @@ define(function (require) {
      * Execute or render cell outputs and select the next cell.
      */
     Notebook.prototype.execute_cell_and_select_below = function () {
+        var indices = this.get_selected_cells_indices();
+        if (indices.length > 1) {
+            this.execute_cells(indices);
+            return;
+        }
 
         var cell = this.get_selected_cell();
         var cell_index = this.find_cell_index(cell);
-        
         cell.execute();
 
         // If we are at the end always insert a new cell and return
@@ -1930,10 +2058,11 @@ define(function (require) {
      */
     Notebook.prototype.execute_cell_range = function (start, end) {
         this.command_mode();
+        var indices = [];
         for (var i=start; i<end; i++) {
-            this.select(i);
-            this.execute_cell();
+            indices.push(i);
         }
+        this.execute_cells(indices);
     };
 
     // Persistance and loading
@@ -2092,16 +2221,16 @@ define(function (require) {
         if (check_last_modified === undefined) {
             check_last_modified = true;
         }
+        
+        var error;
         if (!this._fully_loaded) {
-            this.events.trigger('notebook_save_failed.Notebook',
-                new Error("Load failed, save is disabled")
-            );
-            return;
+            error = new Error("Load failed, save is disabled");
+            this.events.trigger('notebook_save_failed.Notebook', error);
+            return Promise.reject(error);
         } else if (!this.writable) {
-            this.events.trigger('notebook_save_failed.Notebook',
-                new Error("Notebook is read-only")
-            );
-            return;
+            error = new Error("Notebook is read-only");
+            this.events.trigger('notebook_save_failed.Notebook', error);
+            return Promise.reject(error);
         }
 
         // Trigger an event before save, which allows listeners to modify
@@ -2131,6 +2260,8 @@ define(function (require) {
                 function (data) {
                     var last_modified = new Date(data.last_modified);
                     if (last_modified > that.last_modified) {
+                        console.warn("Last saving was done on `"+that.last_modified+"`("+that._last_modified+"), "+
+                                    "while the current file seem to have been saved on `"+data.last_modified+"`")
                         dialog.modal({
                             notebook: that,
                             keyboard_manager: that.keyboard_manager,
@@ -2176,6 +2307,8 @@ define(function (require) {
     Notebook.prototype.save_notebook_success = function (start, data) {
         this.set_dirty(false);
         this.last_modified = new Date(data.last_modified);
+        // debug 484
+        this._last_modified = 'save-success:'+data.last_modified;
         if (data.message) {
             // save succeeded, but validation failed.
             var body = $("<div>");
@@ -2285,8 +2418,8 @@ define(function (require) {
         var parent = utils.url_path_split(this.notebook_path)[0];
         this.contents.copy(this.notebook_path, parent).then(
             function (data) {
-                w.location = utils.url_join_encode(
-                    base_url, 'notebooks', data.path
+                w.location = utils.url_path_join(
+                    base_url, 'notebooks', utils.encode_uri_components(data.path)
                 );
             },
             function(error) {
@@ -2324,6 +2457,8 @@ define(function (require) {
                 that.notebook_name = json.name;
                 that.notebook_path = json.path;
                 that.last_modified = new Date(json.last_modified);
+                // debug 484
+                that._last_modified = json.last_modified;
                 that.session.rename_notebook(json.path);
                 that.events.trigger('notebook_renamed.Notebook', json);
             }
@@ -2421,6 +2556,8 @@ define(function (require) {
         this.scroll_to_top();
         this.writable = data.writable || false;
         this.last_modified = new Date(data.last_modified);
+        // debug 484
+        this._last_modified = 'load-success:'+data.last_modified
         var nbmodel = data.content;
         var orig_nbformat = nbmodel.metadata.orig_nbformat;
         var orig_nbformat_minor = nbmodel.metadata.orig_nbformat_minor;

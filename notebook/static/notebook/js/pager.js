@@ -2,7 +2,7 @@
 // Distributed under the terms of the Modified BSD License.
 
 define([
-    'jqueryui',
+    'jquery-ui',
     'base/js/utils',
 ], function($, utils) {
     "use strict";
@@ -78,6 +78,13 @@ define([
                 // This allows the pager-contents div to use percentage sizing.
                 that.pager_element.height(that.pager_element.height());
                 that._resize();
+                
+                // HACK: Less horrible, but still horrible hack to force the
+                // pager to show it's scrollbars on FireFox. ipython/ipython/#8853
+                that.pager_element.css('position', 'relative');
+                window.requestAnimationFrame(function() { /* Wait one frame */                    
+                    that.pager_element.css('position', '');
+                });
             });
         });
 

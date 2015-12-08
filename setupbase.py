@@ -24,6 +24,11 @@ from glob import glob
 from multiprocessing.pool import ThreadPool
 from subprocess import check_call
 
+if sys.platform == 'win32':
+    from subprocess import list2cmdline
+else:
+    def list2cmdline(cmd_list):
+        return ' '.join(map(pipes.quote, cmd_list))
 
 #-------------------------------------------------------------------------------
 # Useful globals and utility functions
@@ -127,6 +132,8 @@ def find_package_data():
         pjoin(components, "font-awesome", "fonts", "*.*"),
         pjoin(components, "google-caja", "html-css-sanitizer-minified.js"),
         pjoin(components, "jquery", "jquery.min.js"),
+        pjoin(components, "jquery-typeahead", "dist", "jquery.typeahead.min.js"),
+        pjoin(components, "jquery-typeahead", "dist", "jquery.typeahead.min.css"),
         pjoin(components, "jquery-ui", "ui", "minified", "jquery-ui.min.js"),
         pjoin(components, "jquery-ui", "themes", "smoothness", "jquery-ui.min.css"),
         pjoin(components, "jquery-ui", "themes", "smoothness", "images", "*"),
@@ -296,10 +303,8 @@ def mtime(path):
 
 def run(cmd, *args, **kwargs):
     """Echo a command before running it"""
-    if isinstance(cmd, list):
-        cmd = ' '.join(map(pipes.quote, cmd))
-    log.info('> ' + cmd)
-    kwargs['shell'] = True
+    log.info('> ' + list2cmdline(cmd))
+    kwargs['shell'] = (sys.platform == 'win32')
     return check_call(cmd, *args, **kwargs)
 
 

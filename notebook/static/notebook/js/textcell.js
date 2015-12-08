@@ -118,7 +118,7 @@ define([
     // Cell level actions
     
     TextCell.prototype.select = function () {
-        var cont = Cell.prototype.select.apply(this);
+        var cont = Cell.prototype.select.apply(this, arguments);
         if (cont) {
             if (this.mode === 'edit') {
                 this.code_mirror.refresh();
@@ -286,6 +286,9 @@ define([
                             .addClass('anchor-link')
                             .attr('href', '#' + hash)
                             .text('¶')
+                            .on('click',function(){
+                                setTimeout(function(){that.unrender(); that.render()}, 100)
+                            })
                     );
                 });
                 // links in markdown cells should open in new tabs
@@ -298,6 +301,18 @@ define([
         return cont;
     };
 
+    /** @method bind_events **/
+    MarkdownCell.prototype.bind_events = function () {
+        TextCell.prototype.bind_events.apply(this);
+        var that = this;
+
+        this.element.dblclick(function () {
+            var cont = that.unrender();
+            if (cont) {
+                that.focus_editor();
+            }
+        });
+    };
 
     var RawCell = function (options) {
         /**

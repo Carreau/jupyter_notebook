@@ -32,34 +32,57 @@ define([
     MainToolBar.prototype._make = function () {
         var grps = [
           [
-            ['ipython.save-notebook'],
+            ['jupyter-notebook:save-notebook'],
             'save-notbook'
           ],
           [
-            ['ipython.insert-cell-after'],
+            ['jupyter-notebook:insert-cell-below'],
             'insert_above_below'],
           [
-            ['ipython.cut-selected-cell',
-             'ipython.copy-selected-cell',
-             'ipython.paste-cell-after'
+            ['jupyter-notebook:cut-cell',
+             'jupyter-notebook:copy-cell',
+             'jupyter-notebook:paste-cell-below'
             ] ,
             'cut_copy_paste'],
           [
-            ['ipython.move-selected-cell-up',
-             'ipython.move-selected-cell-down'
+            ['jupyter-notebook:move-cell-up',
+             'jupyter-notebook:move-cell-down'
             ],
             'move_up_down'],
-          [ ['ipython.run-select-next',
-             'ipython.interrupt-kernel',
-             'ipython.restart-kernel'
+          [ ['jupyter-notebook:run-cell-and-select-next',
+             'jupyter-notebook:interrupt-kernel',
+             'jupyter-notebook:confirm-restart-kernel'
             ],
             'run_int'],
          ['<add_celltype_list>'],
-         ['<add_celltoolbar_list>'],
-         [['ipython.command-palette']]
+         [['jupyter-notebook:show-command-palette']],
+         ['<add_celltoolbar_reminder>']
         ];
         this.construct(grps);
     };
+   
+    MainToolBar.prototype._pseudo_actions = {};
+
+
+    // reminder of where the celltoolbar new menu is, remove for 5.0
+    MainToolBar.prototype._pseudo_actions.add_celltoolbar_reminder = function () {
+        var _b = $('<button/>').attr('title','show new celltoolbar selector location').addClass('btn btn-default').text('CellToolbar')
+        var btn = $('<div/>').addClass('btn-group').append(_b)
+
+        _b.on('click', function(){
+            setTimeout(function(){$('#view_menu').parent().addClass('pulse')},0) 
+            setTimeout(function(){$('#view_menu').parent().addClass('open')},1000) 
+            setTimeout(function(){$('#menu-cell-toolbar').children('a').addClass('pulse')},2000)
+            setTimeout(function(){$('#menu-cell-toolbar').children('ul').css('display','block')},3000)
+            setTimeout(function(){$('#menu-cell-toolbar').children('ul').css('display','')},5400)
+            setTimeout(function(){$('#menu-cell-toolbar').children('a').removeClass('pulse')},5600)
+            setTimeout(function(){$('#view_menu').parent().removeClass('open')},5800)
+            setTimeout(function(){$('#view_menu').parent().removeClass('pulse')},6000)
+        })
+
+        return btn;
+    };
+
     
     // add a cell type drop down to the maintoolbar.
     // triggered when the pseudo action `<add_celltype_list>` is
@@ -105,57 +128,6 @@ define([
         });
         return sel;
 
-    };
-
-    MainToolBar.prototype._pseudo_actions.add_celltoolbar_list = function () {
-        var label = $('<span/>').addClass("navbar-text").text('Cell Toolbar:');
-        var select = $('<select/>')
-            .attr('id', 'ctb_select')
-            .addClass('form-control select-xs')
-            .append($('<option/>').attr('value', '').text('None'));
-        var that = this;
-        select.change(function() {
-                var val = $(this).val();
-                if (val ==='') {
-                    celltoolbar.CellToolbar.global_hide();
-                    delete that.notebook.metadata.celltoolbar;
-                } else {
-                    celltoolbar.CellToolbar.global_show();
-                    celltoolbar.CellToolbar.activate_preset(val, that.events);
-                    that.notebook.metadata.celltoolbar = val;
-                }
-                that.notebook.focus_cell();
-            });
-        this.notebook.keyboard_manager.register_events(select);
-        // Setup the currently registered presets.
-        var presets = celltoolbar.CellToolbar.list_presets();
-        for (var i=0; i<presets.length; i++) {
-            var name = presets[i];
-            select.append($('<option/>').attr('value', name).text(name));
-        }
-        // Setup future preset registrations.
-        this.events.on('preset_added.CellToolbar', function (event, data) {
-            var name = data.name;
-            select.append($('<option/>').attr('value', name).text(name));
-        });
-        this.events.on('unregistered_preset.CellToolbar', function (event, data) {
-            if (select.val() === data.name){
-                select.val('');
-                celltoolbar.CellToolbar.global_hide();
-                delete that.notebook.metadata.celltoolbar;
-            }
-            select.find("option[value='"+name+"']" ).remove();
-        });
-        // Update select value when a preset is activated.
-        this.events.on('preset_activated.CellToolbar', function (event, data) {
-            if (select.val() !== data.name){
-                select.val(data.name);
-            }
-        });
-
-        var wrapper = $('<div/>').addClass('btn-group');
-        wrapper.append(label).append(select);
-        return wrapper;
     };
 
     return {'MainToolBar': MainToolBar};

@@ -20,7 +20,29 @@ import shlex
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
-sys.path.insert(0, os.path.abspath('../..'))
+
+# DEBUG for RTD
+print("DEBUG:: sys.path")
+print("================")
+for item in sys.path:
+    print(item)
+
+print("os.path.abspath('..')")
+print("=====================")
+print(os.path.abspath('..'))
+
+# Insert absolute path into system path
+sys.path.insert(0, os.path.abspath('..'))
+
+# DEBUG for post insert on RTD
+print("DEBUG:: Post insert to sys.path")
+print("===============================")
+for item in sys.path:
+    print(item)
+
+# Check if docs are being built by ReadTheDocs
+# If so, generate a config.rst file and populate it with documentation about
+# configuration options
 
 if os.environ.get('READTHEDOCS', ''):
 
@@ -152,7 +174,10 @@ html_theme = 'sphinx_rtd_theme'
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-#html_static_path = ['_static']
+# NOTE: Sphinx's 'make html' builder will throw a warning about an unfound
+#       _static directory. Do not remove or comment out html_static_path
+#       since it is needed to properly generate _static in the build directory
+html_static_path = ['_static']
 
 # Add any extra paths that contain custom files (such as robots.txt or
 # .htaccess) here, relative to this directory. These files are copied
@@ -301,5 +326,6 @@ texinfo_documents = [
 intersphinx_mapping = {
     'ipython': ('http://ipython.org/ipython-doc/dev/', None),
     'nbconvert': ('http://nbconvert.readthedocs.org/en/latest/', None),
-    'nbformat': ('http://nbformat.readthedocs.org/en/latest/', None)
+    'nbformat': ('http://nbformat.readthedocs.org/en/latest/', None),
+    'jupyter': ('http://jupyter.readthedocs.org/en/latest/', None),
 }

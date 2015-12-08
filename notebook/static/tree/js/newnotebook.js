@@ -14,6 +14,7 @@ define([
         this.base_url = options.base_url;
         this.notebook_path = options.notebook_path;
         this.contents = options.contents;
+        this.events = options.events;
         this.default_kernel = null;
         this.kernelspecs = {};
         if (this.selector !== undefined) {
@@ -32,7 +33,7 @@ define([
     
     NewNotebookWidget.prototype.request_kernelspecs = function () {
         /** request and then load kernel specs */
-        var url = utils.url_join_encode(this.base_url, 'api/kernelspecs');
+        var url = utils.url_path_join(this.base_url, 'api/kernelspecs');
         utils.promising_ajax(url).then($.proxy(this._load_kernelspecs, this));
     };
     
@@ -69,6 +70,7 @@ define([
                 );
             menu.after(li);
         }
+        this.events.trigger('kernelspecs_loaded.KernelSpec', data.kernelspecs);
     };
     
     NewNotebookWidget.prototype.new_notebook = function (kernel_name) {
@@ -78,8 +80,9 @@ define([
         var w = window.open(undefined, IPython._target);
         this.contents.new_untitled(that.notebook_path, {type: "notebook"}).then(
             function (data) {
-                var url = utils.url_join_encode(
-                    that.base_url, 'notebooks', data.path
+                var url = utils.url_path_join(
+                    that.base_url, 'notebooks',
+                    utils.encode_uri_components(data.path)
                 );
                 if (kernel_name) {
                     url += "?kernel_name=" + kernel_name;

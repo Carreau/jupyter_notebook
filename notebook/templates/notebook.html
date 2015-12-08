@@ -26,11 +26,10 @@ window.mathjax_url = "{{mathjax_url}}";
 {% block params %}
 
 {{super()}}
-data-project="{{project}}"
-data-base-url="{{base_url}}"
-data-ws-url="{{ws_url}}"
-data-notebook-name="{{notebook_name}}"
-data-notebook-path="{{notebook_path}}"
+data-base-url="{{base_url | urlencode}}"
+data-ws-url="{{ws_url | urlencode}}"
+data-notebook-name="{{notebook_name | urlencode}}"
+data-notebook-path="{{notebook_path | urlencode}}"
 
 {% endblock %}
 
@@ -126,10 +125,10 @@ data-notebook-path="{{notebook_path}}"
                 </li>
                 <li class="dropdown"><a href="#" class="dropdown-toggle" data-toggle="dropdown">Edit</a>
                     <ul id="edit_menu" class="dropdown-menu">
-                        <li id="cut_cell"><a href="#">Cut Cell</a></li>
-                        <li id="copy_cell"><a href="#">Copy Cell</a></li>
-                        <li id="paste_cell_above" class="disabled"><a href="#">Paste Cell Above</a></li>
-                        <li id="paste_cell_below" class="disabled"><a href="#">Paste Cell Below</a></li>
+                        <li id="cut_cell"><a href="#">Cut Cells</a></li>
+                        <li id="copy_cell"><a href="#">Copy Cells</a></li>
+                        <li id="paste_cell_above" class="disabled"><a href="#">Paste Cells Above</a></li>
+                        <li id="paste_cell_below" class="disabled"><a href="#">Paste Cells Below</a></li>
                         <li id="paste_cell_replace" class="disabled"><a href="#">Paste Cell &amp; Replace</a></li>
                         <li id="delete_cell"><a href="#">Delete Cell</a></li>
                         <li id="undelete_cell" class="disabled"><a href="#">Undo Delete Cell</a></li>
@@ -143,7 +142,7 @@ data-notebook-path="{{notebook_path}}"
                         <li class="divider"></li>
                         <li id="edit_nb_metadata"><a href="#">Edit Notebook Metadata</a></li>
                         <li class="divider"></li>
-                        <li id="search_and_replace"><a href="#"> Search and Replace </a></li>
+                        <li id="find_and_replace"><a href="#"> Find and Replace </a></li>
                     </ul>
                 </li>
                 <li class="dropdown"><a href="#" class="dropdown-toggle" data-toggle="dropdown">View</a>
@@ -154,6 +153,10 @@ data-notebook-path="{{notebook_path}}"
                         <li id="toggle_toolbar"
                             title="Show/Hide the action icons (below menu bar)">
                             <a href="#">Toggle Toolbar</a></li>
+                        <li id="menu-cell-toolbar" class="dropdown-submenu">
+                            <a href="#">Cell Toolbar</a>
+                            <ul class="dropdown-menu" id="menu-cell-toolbar-submenu"></ul>
+                        </li>
                     </ul>
                 </li>
                 <li class="dropdown"><a href="#" class="dropdown-toggle" data-toggle="dropdown">Insert</a>
@@ -241,6 +244,10 @@ data-notebook-path="{{notebook_path}}"
                             title="Restart the Kernel">
                             <a href="#">Restart</a>
                         </li>
+                        <li id="restart_clear_output"
+                            title="Restart the Kernel and clear all output">
+                            <a href="#">Restart &amp; Clear Output</a>
+                        </li>
                         <li id="restart_run_all"
                             title="Restart the Kernel and re-run the notebook">
                             <a href="#">Restart &amp; Run All</a>
@@ -273,7 +280,7 @@ data-notebook-path="{{notebook_path}}"
 
                         {% for helplinks in sections %}
                             {% for link in helplinks %}
-                                <li><a rel="noreferrer" href="{{link[0]}}" {{'target="_blank" title="Opens in a new window"' if link[2]}}>
+                                <li><a rel="noreferrer" href="{{link[0]}}" target="{{'_blank' if link[2]}}" title="{{'Opens in a new window' if link[2]}}">
                                 {% if link[2] %}
                                     <i class="fa fa-external-link menu-icon pull-right"></i>
                                 {% endif %}

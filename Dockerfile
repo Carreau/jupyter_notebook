@@ -6,53 +6,100 @@ FROM ubuntu:14.04
 
 MAINTAINER Project Jupyter <jupyter@googlegroups.com>
 
-ENV DEBIAN_FRONTEND noninteractive
-
 # Not essential, but wise to set the lang
 # Note: Users with other languages should set this in their derivative image
-RUN apt-get update && apt-get install -y language-pack-en
 ENV LANGUAGE en_US.UTF-8
 ENV LANG en_US.UTF-8
 ENV LC_ALL en_US.UTF-8
+ENV PYTHONIOENCODING UTF-8
 
-RUN locale-gen en_US.UTF-8
-RUN dpkg-reconfigure locales
+# Remove preinstalled copy of python that blocks our ability to install development python.
+RUN DEBIAN_FRONTEND=noninteractive apt-get remove -yq \
+        python3-minimal \
+        python3.4 \
+        python3.4-minimal \
+        libpython3-stdlib \
+        libpython3.4-stdlib \
+        libpython3.4-minimal
 
-# Python binary dependencies, developer tools
-RUN apt-get update && apt-get install -y -q \
-    build-essential \
-    make \
-    gcc \
-    zlib1g-dev \
-    git \
-    python \
-    python-dev \
-    python-pip \
-    python3-dev \
-    python3-pip \
-    python-sphinx \
-    python3-sphinx \
-    libzmq3-dev \
-    sqlite3 \
-    libsqlite3-dev \
-    pandoc \
-    libcurl4-openssl-dev \
-    nodejs \
-    nodejs-legacy \
-    npm
+# Python binary and source dependencies
+RUN apt-get update -qq && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -yq --no-install-recommends \
+        build-essential \
+        ca-certificates \
+        curl \
+        git \
+        language-pack-en \
+        libcurl4-openssl-dev \
+        libffi-dev \
+        libsqlite3-dev \
+        libzmq3-dev \
+        pandoc \
+        python \
+        python3 \
+        python-dev \
+        python3-dev \
+        sqlite3 \
+        texlive-fonts-recommended \
+        texlive-latex-base \
+        texlive-latex-extra \
+        zlib1g-dev && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
-RUN pip2 install --upgrade setuptools pip
-RUN pip3 install --upgrade setuptools pip
+# Install Tini
+RUN curl -L https://github.com/krallin/tini/releases/download/v0.6.0/tini > tini && \
+    echo "d5ed732199c36a1189320e6c4859f0169e950692f451c03e7854243b95f4234b *tini" | sha256sum -c - && \
+    mv tini /usr/local/bin/tini && \
+    chmod +x /usr/local/bin/tini
 
-RUN pip2 install ipykernel
-RUN pip3 install ipykernel
+# Install the recent pip release
+RUN curl -O https://bootstrap.pypa.io/get-pip.py && \
+    python2 get-pip.py && \
+    python3 get-pip.py && \
+    rm get-pip.py && \
+    pip2 --no-cache-dir install requests[security] && \
+    pip3 --no-cache-dir install requests[security]
 
-RUN mkdir -p /srv/
-ADD . /srv/notebook
-WORKDIR /srv/notebook/
+# Install some dependencies.
+RUN pip2 --no-cache-dir install ipykernel && \
+    pip3 --no-cache-dir install ipykernel && \
+    \
+    python2 -m ipykernel.kernelspec && \
+    python3 -m ipykernel.kernelspec
 
-RUN pip3 install --pre -e .
+# Move notebook contents into place.
+ADD . /usr/src/jupyter-notebook
 
-# install kernels
-RUN python2 -m ipykernel.kernelspec
-RUN python3 -m ipykernel.kernelspec
+# Install dependencies and run tests.
+RUN BUILD_DEPS="nodejs-legacy npm" && \
+    apt-get update -qq && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -yq $BUILD_DEPS && \
+    \
+    pip3 install --no-cache-dir --pre -e /usr/src/jupyter-notebook && \
+    \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* && \
+    apt-get purge -y --auto-remove \
+        -o APT::AutoRemove::RecommendsImportant=false -o APT::AutoRemove::SuggestsImportant=false $BUILD_DEPS
+
+# Run tests.
+RUN pip2 install --no-cache-dir mock nose requests testpath && \
+    pip3 install --no-cache-dir nose requests testpath && \
+    \
+    iptest2 && iptest3 && \
+    \
+    pip2 uninstall -y funcsigs mock nose pbr requests six testpath && \
+    pip3 uninstall -y nose requests testpath
+
+# Add a notebook profile.
+RUN mkdir -p -m 700 /root/.jupyter/ && \
+    echo "c.NotebookApp.ip = '*'" >> /root/.jupyter/jupyter_notebook_config.py
+
+VOLUME /notebooks
+WORKDIR /notebooks
+
+EXPOSE 8888
+
+ENTRYPOINT ["tini", "--"]
+CMD ["jupyter", "notebook"]

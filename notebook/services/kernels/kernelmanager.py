@@ -9,7 +9,9 @@
 
 import os
 
-from tornado import web
+from tornado import gen, web
+from tornado.concurrent import Future
+from tornado.ioloop import IOLoop
 
 from jupyter_client.multikernelmanager import MultiKernelManager
 from traitlets import List, Unicode, TraitError
@@ -60,7 +62,8 @@ class MappingKernelManager(MultiKernelManager):
         while not os.path.isdir(os_path) and os_path != self.root_dir:
             os_path = os.path.dirname(os_path)
         return os_path
-
+    
+    @gen.coroutine
     def start_kernel(self, kernel_id=None, path=None, **kwargs):
         """Start a kernel for a session and return its kernel_id.
 
@@ -80,8 +83,9 @@ class MappingKernelManager(MultiKernelManager):
         if kernel_id is None:
             if path is not None:
                 kwargs['cwd'] = self.cwd_for_path(path)
-            kernel_id = super(MappingKernelManager, self).start_kernel(
-                                            **kwargs)
+            kernel_id = yield gen.maybe_future(
+                super(MappingKernelManager, self).start_kernel(**kwargs)
+            )
             self.log.info("Kernel started: %s" % kernel_id)
             self.log.debug("Kernel args: %r" % kwargs)
             # register callback for failed auto-restart
@@ -92,12 +96,54 @@ class MappingKernelManager(MultiKernelManager):
         else:
             self._check_kernel_id(kernel_id)
             self.log.info("Using existing kernel: %s" % kernel_id)
-        return kernel_id
+        # py2-compat
+        raise gen.Return(kernel_id)
 
     def shutdown_kernel(self, kernel_id, now=False):
         """Shutdown a kernel by kernel_id"""
         self._check_kernel_id(kernel_id)
-        super(MappingKernelManager, self).shutdown_kernel(kernel_id, now=now)
+        return super(MappingKernelManager, self).shutdown_kernel(kernel_id, now=now)
+
+    def restart_kernel(self, kernel_id):
+        """Restart a kernel by kernel_id"""
+        self._check_kernel_id(kernel_id)
+        super(MappingKernelManager, self).restart_kernel(kernel_id)
+        kernel = self.get_kernel(kernel_id)
+        # return a Future that will resolve when the kernel has successfully restarted
+        channel = kernel.connect_shell()
+        future = Future()
+        
+        def finish():
+            """Common cleanup when restart finishes/fails for any reason."""
+            if not channel.closed:
+                channel.close()
+            loop.remove_timeout(timeout)
+            kernel.remove_restart_callback(on_restart_failed, 'dead')
+        
+        def on_reply(msg):
+            self.log.debug("Kernel info reply received: %s", kernel_id)
+            finish()
+            if not future.done():
+                future.set_result(msg)
+            
+        def on_timeout():
+            self.log.warn("Timeout waiting for kernel_info_reply: %s", kernel_id)
+            finish()
+            if not future.done():
+                future.set_exception(gen.TimeoutError("Timeout waiting for restart"))
+        
+        def on_restart_failed():
+            self.log.warn("Restarting kernel failed: %s", kernel_id)
+            finish()
+            if not future.done():
+                future.set_exception(RuntimeError("Restart failed"))
+        
+        kernel.add_restart_callback(on_restart_failed, 'dead')
+        kernel.session.send(channel, "kernel_info_request")
+        channel.on_recv(on_reply)
+        loop = IOLoop.current()
+        timeout = loop.add_timeout(loop.time() + 30, on_timeout)
+        return future
 
     def kernel_model(self, kernel_id):
         """Return a dictionary of kernel information described in the

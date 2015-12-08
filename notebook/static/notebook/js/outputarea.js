@@ -2,7 +2,7 @@
 // Distributed under the terms of the Modified BSD License.
 
 define([
-    'jqueryui',
+    'jquery-ui',
     'base/js/utils',
     'base/js/security',
     'base/js/keyboard',
@@ -776,7 +776,7 @@ define([
             .append(
                 $("<pre/>")
                 .addClass("raw_input_prompt")
-                .text(content.prompt)
+                .html(utils.fixConsole(content.prompt))
                 .append(
                     $("<input/>")
                     .addClass("raw_input")

@@ -6,9 +6,10 @@ define([
     'base/js/namespace',
     'base/js/dialog',
     'base/js/utils',
-    'notebook/js/tour',
+    './celltoolbar',
+    './tour',
     'moment',
-], function($, IPython, dialog, utils, tour, moment) {
+], function($, IPython, dialog, utils, celltoolbar, tour, moment) {
     "use strict";
     
     var MenuBar = function (selector, options) {
@@ -62,15 +63,15 @@ define([
                 // The selected cell loses focus when the menu is entered, so we
                 // re-select it upon selection.
                 var i = that.notebook.get_selected_index();
-                that.notebook.select(i);
+                that.notebook.select(i, false);
             }
         );
     };
 
     MenuBar.prototype._nbconvert = function (format, download) {
         download = download || false;
-        var notebook_path = this.notebook.notebook_path;
-        var url = utils.url_join_encode(
+        var notebook_path = utils.encode_uri_components(this.notebook.notebook_path);
+        var url = utils.url_path_join(
             this.base_url,
             'nbconvert',
             format,
@@ -92,7 +93,7 @@ define([
          * Update header spacer size.
          */
         console.warn('`_size_header` is deprecated and will be removed in future versions.'+
-                     ' Please trigger the `resize-header.Page` manually if you rely on it.')
+                     ' Please trigger the `resize-header.Page` manually if you rely on it.');
         this.events.trigger('resize-header.Page');
     };
 
@@ -104,7 +105,11 @@ define([
         
         this.element.find('#open_notebook').click(function () {
             var parent = utils.url_path_split(that.notebook.notebook_path)[0];
-            window.open(utils.url_join_encode(that.base_url, 'tree', parent), IPython._target);
+            window.open(
+                utils.url_path_join(
+                    that.base_url, 'tree',
+                    utils.encode_uri_components(parent)
+                ), IPython._target);
         });
         this.element.find('#copy_notebook').click(function () {
             if (that.notebook.dirty) {
@@ -115,10 +120,11 @@ define([
         });
         this.element.find('#download_ipynb').click(function () {
             var base_url = that.notebook.base_url;
-            var notebook_path = that.notebook.notebook_path;
+            var notebook_path = utils.encode_uri_components(that.notebook.notebook_path);
             var w = window.open('');
-            var url = utils.url_join_encode(base_url, 'files', notebook_path)
-                                + '?download=1';
+            var url = utils.url_path_join(
+                base_url, 'files', notebook_path
+            ) + '?download=1';
             if (that.notebook.dirty) {
                 that.notebook.save_notebook().then(function() {
                     w.location = url;
@@ -152,14 +158,7 @@ define([
             that._nbconvert('script', true);
         });
 
-        this.element.find('#rename_notebook').click(function () {
-            that.save_widget.rename_notebook({notebook: that.notebook});
-        });
 
-
-        this.element.find('#trust_notebook').click(function () {
-            that.notebook.trust_notebook();
-        });
         this.events.on('trust_changed.Notebook', function (event, trusted) {
             if (trusted) {
                 that.element.find('#trust_notebook')
@@ -186,6 +185,9 @@ define([
             that.notebook.session.delete(close_window, close_window);
         });
 
+        // View
+        this._add_celltoolbar_list();
+
         // Edit
         this.element.find('#edit_nb_metadata').click(function () {
             that.notebook.edit_metadata({
@@ -194,68 +196,62 @@ define([
         });
              
         var id_actions_dict = {
-            '#search_and_replace' : 'ipython.search-and-replace-dialog',
-            '#save_checkpoint': 'ipython.save-notebook',
-            '#restart_kernel': 'ipython.restart-kernel',
-            '#int_kernel': 'ipython.interrupt-kernel',
-            '#cut_cell': 'ipython.cut-selected-cell',
-            '#copy_cell': 'ipython.copy-selected-cell',
-            '#delete_cell': 'ipython.delete-cell',
-            '#undelete_cell': 'ipython.undo-last-cell-deletion',
-            '#split_cell': 'ipython.split-cell-at-cursor',
-            '#merge_cell_above': 'ipython.merge-selected-cell-with-cell-before',
-            '#merge_cell_below': 'ipython.merge-selected-cell-with-cell-after',
-            '#move_cell_up': 'ipython.move-selected-cell-up',
-            '#move_cell_down': 'ipython.move-selected-cell-down',
-            '#toggle_header': 'ipython.toggle-header',
-            '#toggle_toolbar': 'ipython.toggle-toolbar',
-            '#insert_cell_above': 'ipython.insert-cell-before',
-            '#insert_cell_below': 'ipython.insert-cell-after',
-            '#run_cell': 'ipython.execute-in-place',
-            '#run_cell_select_below': 'ipython.run-select-next',
-            '#run_cell_insert_below': 'ipython.execute-and-insert-after',
-            '#run_all_cells': 'ipython.run-all-cells',
-            '#run_all_cells_above': 'ipython.run-all-cells-above',
-            '#run_all_cells_below': 'ipython.run-all-cells-below',
-            '#to_code': 'ipython.change-selected-cell-to-code-cell',
-            '#to_markdown': 'ipython.change-selected-cell-to-markdown-cell',
-            '#to_raw': 'ipython.change-selected-cell-to-raw-cell',
-            '#toggle_current_output': 'ipython.toggle-output-visibility-selected-cell',
-            '#toggle_current_output_scroll': 'ipython.toggle-output-scrolling-selected-cell',
-            '#clear_current_output': 'ipython.clear-output-selected-cell',
+            '#trust_notebook' : 'trust-notebook',
+            '#rename_notebook' : 'rename-notebook',
+            '#find_and_replace' : 'find-and-replace',
+            '#save_checkpoint': 'save-notebook',
+            '#restart_kernel': 'confirm-restart-kernel',
+            '#restart_clear_output': 'confirm-restart-kernel-and-clear-output',
+            '#restart_run_all': 'confirm-restart-kernel-and-run-all-cells',
+            '#int_kernel': 'interrupt-kernel',
+            '#cut_cell': 'cut-cell',
+            '#copy_cell': 'copy-cell',
+            '#delete_cell': 'delete-cell',
+            '#undelete_cell': 'undo-cell-deletion',
+            '#split_cell': 'split-cell-at-cursor',
+            '#merge_cell_above': 'merge-cell-with-previous-cell',
+            '#merge_cell_below': 'merge-cell-with-next-cell',
+            '#move_cell_up': 'move-cell-up',
+            '#move_cell_down': 'move-cell-down',
+            '#toggle_header': 'toggle-header',
+            '#toggle_toolbar': 'toggle-toolbar',
+            '#insert_cell_above': 'insert-cell-above',
+            '#insert_cell_below': 'insert-cell-below',
+            '#run_cell': 'run-cell',
+            '#run_cell_select_below': 'run-cell-and-select-next',
+            '#run_cell_insert_below': 'run-cell-and-insert-below',
+            '#run_all_cells': 'run-all-cells',
+            '#run_all_cells_above': 'run-all-cells-above',
+            '#run_all_cells_below': 'run-all-cells-below',
+            '#to_code': 'change-cell-to-code',
+            '#to_markdown': 'change-cell-to-markdown',
+            '#to_raw': 'change-cell-to-raw',
+            '#toggle_current_output': 'toggle-cell-output-collapsed',
+            '#toggle_current_output_scroll': 'toggle-cell-output-scrolled',
+            '#clear_current_output': 'clear-cell-output',
+            '#toggle_all_output': 'toggle-all-cells-output-collapsed',
+            '#toggle_all_output_scroll': 'toggle-all-cells-output-scrolled',
+            '#clear_all_output': 'clear-all-cells-output',
         };
 
         for(var idx in id_actions_dict){
             if (!id_actions_dict.hasOwnProperty(idx)){
                 continue;
             }
-            var id_act = id_actions_dict[idx];
+            var id_act = 'jupyter-notebook:'+id_actions_dict[idx];
             if(!that.actions.exists(id_act)){
-                console.warn('actions', id_act, 'does not exist, still binding it in case it will be defined later...' )
+                console.warn('actions', id_act, 'does not exist, still binding it in case it will be defined later...');
             }
             // Immediately-Invoked Function Expression cause JS.
             (function(that, id_act, idx){
                 that.element.find(idx).click(function(event){
-                    that.actions.call(id_act, event)
-                })
+                    that.actions.call(id_act, event);
+                });
             })(that, id_act, idx);
         }
 
         
-        this.element.find('#toggle_all_output').click(function () {
-            that.notebook.toggle_all_output();
-        });
-        this.element.find('#toggle_all_output_scroll').click(function () {
-            that.notebook.toggle_all_output_scroll();
-        });
-        this.element.find('#clear_all_output').click(function () {
-            that.notebook.clear_all_output();
-        });
-        
         // Kernel
-        this.element.find('#restart_run_all').click(function () {
-            that.actions.call('ipython.restart-run-all');
-        });
         this.element.find('#reconnect_kernel').click(function () {
             that.notebook.kernel.reconnect();
         });
@@ -290,6 +286,50 @@ define([
             var langinfo = data.kernel.info_reply.language_info || {};
             that.update_nbconvert_script(langinfo);
             that.add_kernel_help_links(data.kernel.info_reply.help_links || []);
+        });
+    };
+    
+    MenuBar.prototype._add_celltoolbar_list = function () {
+        var that = this;
+        var submenu = $("#menu-cell-toolbar-submenu");
+        
+        function preset_added(event, data) {
+            var name = data.name;
+            submenu.append(
+                $("<li/>")
+                .attr('data-name', encodeURIComponent(name))
+                .append(
+                    $("<a/>")
+                    .attr('href', '#')
+                    .text(name)
+                    .click(function () {
+                        if (name ==='None') {
+                            celltoolbar.CellToolbar.global_hide();
+                            delete that.notebook.metadata.celltoolbar;
+                        } else {
+                            celltoolbar.CellToolbar.global_show();
+                            celltoolbar.CellToolbar.activate_preset(name, that.events);
+                            that.notebook.metadata.celltoolbar = name;
+                        }
+                        that.notebook.focus_cell();
+                    })
+                )
+            );
+        }
+        
+        // Setup the existing presets
+        var presets = celltoolbar.CellToolbar.list_presets();
+        preset_added(null, {name: "None"});
+        presets.map(function (name) {
+            preset_added(null, {name: name});
+        });
+
+        // Setup future preset registrations
+        this.events.on('preset_added.CellToolbar', preset_added);
+        
+        // Handle unregistered presets
+        this.events.on('unregistered_preset.CellToolbar', function (event, data) {
+            submenu.find("li[data-name='" + encodeURIComponent(data.name) + "']").remove();
         });
     };
 
