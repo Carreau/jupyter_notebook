@@ -308,6 +308,13 @@ class NbserverListApp(JupyterApp):
                   "details from the server info file.")
 
     def start(self):
+        import os
+        if not windows:
+            euid = os.geteuid()
+            if euid == 0:
+                import sys
+                sys.exit('Shamelessly refusing to start as root')
+
         if not self.json:
             print("Currently running servers:")
         for serverinfo in list_running_servers(self.runtime_dir):
