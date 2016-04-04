@@ -82,6 +82,20 @@ define(function(require){
                 env.notebook.restart_run_all({confirm: false});
             }
         },
+        'toggle-all-line-numbers':{
+            icon: 'fa-list-ol',
+            help: 'Toggle line numbers in all codecells',
+            handler: function (env) {
+                console.log("Put code here to toggle all line numbers in code cell");
+                /**
+                 * note, that we likely want 2 functions: `show all line
+                 * numbers`, and `hide all line numbers` and call the right one
+                 * depending on context indeed, toggle might not be the right
+                 * abstraction as you can show the line number on a per cell
+                 * basis, so toggle might not make sens.
+                 **/
+            }
+        },
         'confirm-restart-kernel-and-run-all-cells': {
             help: 'restart the kernel, then re-run the whole notebook (with dialog)',
             handler: function (env) {
