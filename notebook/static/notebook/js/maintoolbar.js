@@ -54,6 +54,7 @@ define([
             ],
             'run_int'],
          ['<add_celltype_list>'],
+         [['jupyter-notebook:toggle-all-line-numbers']],
          [['jupyter-notebook:show-command-palette']],
          ['<add_celltoolbar_reminder>']
         ];
