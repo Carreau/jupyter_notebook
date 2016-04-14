@@ -2,12 +2,12 @@
 
 var normalized_shortcuts = [
     'ctrl-shift-m',
-    'alt-meta-p',
+    'alt-meta-p'
 ];
 
 var to_normalize = [
     ['shift-%', 'shift-5'],
-    ['ShiFT-MeTa-CtRl-AlT-m', 'alt-ctrl-meta-shift-m'],
+    ['ShiFT-MeTa-CtRl-AlT-m', 'alt-ctrl-meta-shift-m']
 ];
 
 var unshifted = "` 1 2 3 4 5 6 7 8 9 0 - = q w e r t y u i o p [ ] \\ a s d f g h j k l ; ' z x c v b n m , . /";
@@ -71,10 +71,10 @@ casper.notebook_test(function () {
         that.msgs = [];
         that.on('remote.message', function(msg) {
           that.msgs.push(msg);
-        })
+        });
         that.evaluate(function (obj) {
             for(var k in obj){
-                IPython.keyboard_manager.command_shortcuts.add_shortcut(k, function(){console.log(obj[k])});
+                IPython.keyboard_manager.command_shortcuts.add_shortcut(k, function(){console.log(obj[k]);});
             }
         }, shortcuts_test);
 
@@ -86,6 +86,6 @@ casper.notebook_test(function () {
         }
         this.test.assert(longer_first, 'no warning if registering shorter shortut');
         this.test.assert(longer_last , 'no warning if registering longer shortut');
-    })
+    });
 
 });

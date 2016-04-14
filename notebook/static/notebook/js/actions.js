@@ -479,7 +479,7 @@ define(function(require){
                     env.pager.collapse();
                 }
             }
-        },
+        }
     };
 
     /**
@@ -543,7 +543,7 @@ define(function(require){
                     event.preventDefault();
                 }
                 return env.notebook.scroll_manager.scroll(1);
-            },
+            }
         },
         'scroll-notebook-up': {
             handler: function(env, event) {
@@ -551,7 +551,7 @@ define(function(require){
                     event.preventDefault();
                 }
                 return env.notebook.scroll_manager.scroll(-1);
-            },
+            }
         },
         'scroll-cell-center': {
             help: "Scroll the current cell to the center",
@@ -621,7 +621,7 @@ define(function(require){
                 }
                 return false;
             }
-        },
+        }
     };
 
     // private stuff that prepend `jupyter-notebook:` to actions names
