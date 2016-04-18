@@ -21,8 +21,7 @@ from distutils import log
 from distutils.cmd import Command
 from fnmatch import fnmatch
 from glob import glob
-from multiprocessing.pool import ThreadPool
-from subprocess import check_call, check_output
+from subprocess import check_call
 
 if sys.platform == 'win32':
     from subprocess import list2cmdline
